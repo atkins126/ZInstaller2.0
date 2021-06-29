@@ -27,6 +27,7 @@ type
     Timer: TTimer;
     ProgressBar: TProgressBar;
     CheckBox_Encrypt: TCheckBox;
+    SoftEdit: TLabeledEdit;
     procedure TimerTimer(Sender: TObject);
     procedure DirBrowseButtonClick(Sender: TObject);
     procedure buildButtonClick(Sender: TObject);
@@ -34,6 +35,7 @@ type
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
   private
     Busy: Boolean;
+    LastState_: SystemString;
     procedure DoStatus_Backcall(Text_: SystemString; const ID: Integer);
     procedure ZDB2_File_OnProgress(State_: SystemString; Total, Current1, Current2: Int64);
     function EncodeDirectory(Directory_, ZDB2File_, Password_: U_String; ThNum_: Integer; chunkSize_: Int64; CM: TSelectCompressionMethod; BlockSize_: Word): Int64;
@@ -52,6 +54,7 @@ implementation
 
 procedure TInstaller2BuildToolForm.TimerTimer(Sender: TObject);
 begin
+  InfoLabel.Caption := LastState_;
   CheckThreadSynchronize;
 end;
 
@@ -61,7 +64,11 @@ var
 begin
   dir_ := DirectoryEdit.Text;
   if SelectDirectory('select source directory.', '/', dir_, [sdNewFolder, sdShowShares, sdNewUI]) then
+    begin
       DirectoryEdit.Text := dir_;
+      if SoftEdit.Text = '' then
+          SoftEdit.Text := umlGetLastStr(DirectoryEdit.Text, '/\');
+    end;
 end;
 
 procedure TInstaller2BuildToolForm.buildButtonClick(Sender: TObject);
@@ -72,6 +79,7 @@ begin
   TCompute.RunP_NP(procedure
     var
       dir_: U_String;
+      software_: U_String;
       nArry: U_StringArray;
       n: U_SystemString;
       dirName: U_String;
@@ -85,14 +93,21 @@ begin
           DirectoryEdit.Enabled := False;
           DirBrowseButton.Enabled := False;
           buildButton.Enabled := False;
+          SoftEdit.Enabled := False;
           ThNumEdit.Enabled := False;
           ChunkEdit.Enabled := False;
           BlockEdit.Enabled := False;
           CheckBox_Encrypt.Enabled := False;
           dir_ := DirectoryEdit.Text;
+          software_ := SoftEdit.Text;
         end);
 
+      if software_.L = 0 then
+          software_ := umlGetLastStr(dir_, '/\');
+
       te := THashTextEngine.Create;
+      te.SetDefaultText('Main___', 'Software', software_);
+      te.SetDefaultText('Main___', 'Folder', software_);
 
       nArry := umlGetDirListWithFullPath(dir_);
       for n in nArry do
@@ -132,6 +147,10 @@ begin
       disposeObject(te);
 
       ZDB2_File_OnProgress('...', 100, 0, 0);
+
+      if umlFileExists(umlCombineFileName(TPath.GetLibraryPath, 'zInstaller2.exe')) then
+          umlCopyFile(umlCombineFileName(TPath.GetLibraryPath, 'zInstaller2.exe'), umlCombineFileName(dir_, 'zInstaller2.exe'));
+
       DoStatus('all finish.');
 
       TCompute.Sync(procedure
@@ -139,6 +158,7 @@ begin
           DirectoryEdit.Enabled := True;
           DirBrowseButton.Enabled := True;
           buildButton.Enabled := True;
+          SoftEdit.Enabled := True;
           ThNumEdit.Enabled := True;
           ChunkEdit.Enabled := True;
           BlockEdit.Enabled := True;
@@ -187,7 +207,7 @@ begin
     begin
       ProgressBar.Max := 100;
       ProgressBar.Position := umlPercentageToInt64(Total, Current1);
-      InfoLabel.Caption := State_;
+      LastState_ := State_;
     end);
 end;
 
@@ -200,6 +220,7 @@ begin
   ChunkEdit.Text := '1024*1024';
   BlockEdit.Text := '4*1024';
   Busy := False;
+  LastState_ := '';
 end;
 
 destructor TInstaller2BuildToolForm.Destroy;
